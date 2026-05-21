@@ -400,15 +400,41 @@ Any package with a license not in the list will be flagged as `risky`.
 | `GEMINI_API_KEY` | Gemini provider |
 | `X_BEARER_TOKEN` | X/Twitter monitoring |
 
-Set `NO_VULL_PROVIDER` and `NO_VULL_MODEL` in your shell profile to avoid passing flags on every run:
+### .env file
+
+no-vull automatically loads a `.env` file from the directory you run it in. Copy the example to get started:
 
 ```bash
-# ~/.zshrc or ~/.bashrc
-export NO_VULL_PROVIDER=lmstudio
-export NO_VULL_MODEL=qwen/qwen3.6-27b
+cp .env.example .env
 ```
 
-Priority: explicit flag > env var > built-in default (`claude`).
+Then fill in your values:
+
+```bash
+# .env
+NO_VULL_PROVIDER=lmstudio
+NO_VULL_MODEL=qwen/qwen3.6-27b
+
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+
+X_BEARER_TOKEN=your_bearer_token_here
+```
+
+`.env` is gitignored — your keys won't be committed. Shell environment variables take priority over `.env` values.
+
+### Shell profile
+
+To set defaults globally across all projects, add to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export NO_VULL_PROVIDER=lmstudio
+export NO_VULL_MODEL=qwen/qwen3.6-27b
+export X_BEARER_TOKEN=your_bearer_token_here
+```
+
+Priority: explicit flag > shell env > `.env` file > built-in default (`claude`).
 
 ---
 
