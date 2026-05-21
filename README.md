@@ -393,10 +393,22 @@ Any package with a license not in the list will be flagged as `risky`.
 
 | Variable | Used by |
 |----------|---------|
+| `NO_VULL_PROVIDER` | Default LLM provider (overridden by `--provider`) |
+| `NO_VULL_MODEL` | Default model name (overridden by `--model`) |
 | `ANTHROPIC_API_KEY` | Claude provider |
 | `OPENAI_API_KEY` | OpenAI provider |
 | `GEMINI_API_KEY` | Gemini provider |
 | `X_BEARER_TOKEN` | X/Twitter monitoring |
+
+Set `NO_VULL_PROVIDER` and `NO_VULL_MODEL` in your shell profile to avoid passing flags on every run:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+export NO_VULL_PROVIDER=lmstudio
+export NO_VULL_MODEL=qwen/qwen3.6-27b
+```
+
+Priority: explicit flag > env var > built-in default (`claude`).
 
 ---
 
