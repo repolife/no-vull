@@ -18,6 +18,7 @@ Local LLM-powered npm vulnerability and package health analyzer. Runs `npm audit
 - **CI mode** — `check` command exits non-zero on violations, `--exit-code` flag for scan
 - **Multi-provider** — Claude, Ollama, LM Studio, Gemini, OpenAI, or any OpenAI-compatible local model
 - **pnpm / yarn support** — auto-detects lockfile and package manager
+- **macOS menu bar app** — native Swift app shows live severity badge, notifies on new findings
 
 ---
 
@@ -226,6 +227,68 @@ no-vull watch --provider ollama --model llama3.2
 ```
 
 Debounces rapid lockfile changes during installs (1.5 second delay) to avoid firing mid-write.
+
+---
+
+## macOS Menu Bar App
+
+A native Swift/SwiftUI menu bar app that shows your latest scan result at a glance and sends macOS notifications when severity worsens.
+
+**How it works:** the CLI writes `~/.no-vull/latest.json` after every scan. The menu bar watches that file and updates its icon automatically — no background daemon, no socket, no polling overhead.
+
+### Requirements
+
+- macOS 13 (Ventura) or newer
+- Xcode Command Line Tools: `xcode-select --install`
+
+### Install
+
+```bash
+cd MenuBar
+chmod +x install.sh
+./install.sh
+```
+
+The script builds the app in release mode, copies the binary to `~/.local/bin/NoVullMenuBar`, registers a launchd agent so it auto-starts on login, and launches it immediately.
+
+Then run any scan to populate the icon:
+
+```bash
+no-vull ~/projects/my-app
+```
+
+### Icon states
+
+| Icon | Meaning |
+|------|---------|
+| Shield (gray) | Clean — no vulnerabilities found |
+| Shield (blue) | Info-level findings |
+| Shield (yellow) | Low severity |
+| Shield (orange) | Moderate severity |
+| Shield (red) + dot | High or critical vulnerability |
+| Spinning arrows | Rescan in progress |
+
+### Rescan button
+
+Click the menu bar icon and hit **Rescan** to re-run `no-vull` against the last scanned repo. The app looks for the CLI binary in these locations:
+
+1. `/usr/local/bin/no-vull`
+2. `~/.local/bin/no-vull`
+3. `/opt/homebrew/bin/no-vull`
+
+If `no-vull` isn't found in one of those paths, symlink it:
+
+```bash
+ln -s $(which no-vull) ~/.local/bin/no-vull
+```
+
+### Uninstall
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.no-vull.menubar.plist
+rm ~/Library/LaunchAgents/com.no-vull.menubar.plist
+rm ~/.local/bin/NoVullMenuBar
+```
 
 ---
 
