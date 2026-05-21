@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { config as loadEnv } from "./env.js";
+loadEnv();
 import { program } from "commander";
 import { resolve } from "path";
 import chalk from "chalk";
