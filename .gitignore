@@ -1,0 +1,24 @@
+# Node
+node_modules/
+dist/
+*.js.map
+
+# no-vull scan cache
+.no-vull/
+
+# Swift / Xcode
+MenuBar/.build/
+MenuBar/*.xcodeproj/xcuserdata/
+MenuBar/DerivedData/
+*.o
+*.d
+
+# macOS
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# Reports
+report.html

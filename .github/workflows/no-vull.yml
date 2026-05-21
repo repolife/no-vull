@@ -1,0 +1,66 @@
+name: no-vull security scan
+
+on:
+  push:
+    paths:
+      - "package-lock.json"
+      - "package.json"
+  pull_request:
+    paths:
+      - "package-lock.json"
+      - "package.json"
+  schedule:
+    - cron: "0 8 * * 1"   # every Monday 8am UTC
+  workflow_dispatch:
+
+jobs:
+  vulnerability-scan:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install no-vull
+        run: npm install -g no-vull
+
+      - name: Run vulnerability scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: no-vull . --exit-code
+
+      - name: Run health check against standards
+        run: no-vull check . --fail-on outdated
+
+  supply-chain:
+    name: Supply-chain check
+    runs-on: ubuntu-latest
+    # Run weekly or on lockfile changes only — slower due to registry calls
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install no-vull
+        run: npm install -g no-vull
+
+      - name: Supply-chain audit
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: no-vull . --supply-chain --exit-code

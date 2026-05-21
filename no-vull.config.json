@@ -1,0 +1,12 @@
+{
+  "standards": {
+    "maxPackageAgeDays": 360,
+    "maxMajorsBehind": 2,
+    "minWeeklyDownloads": 41284000,
+    "minMaintainers": 1,
+    "allowDevDepsToAge": true,
+    "allowedLicenses": []
+  },
+  "ignore": [],
+  "exceptions": {}
+}
