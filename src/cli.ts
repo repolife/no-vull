@@ -121,10 +121,12 @@ program
 program
   .command("watch [path]")
   .description("Watch package-lock.json for changes and re-scan automatically")
-  .option("--provider <provider>", "LLM provider", "claude")
-  .option("--model <model>", "Model name override")
+  .option("--provider <provider>", "LLM provider (env: NO_VULL_PROVIDER)")
+  .option("--model <model>", "Model name override (env: NO_VULL_MODEL)")
   .option("--no-osv", "Skip OSV.dev cross-check")
-  .action(async (targetPath = ".", opts: { provider: string; model?: string; osv: boolean }) => {
+  .action(async (targetPath = ".", opts: { provider?: string; model?: string; osv: boolean }) => {
+    const effectiveProvider = opts.provider ?? process.env.NO_VULL_PROVIDER ?? "claude";
+    const effectiveModel = opts.model ?? process.env.NO_VULL_MODEL;
     const { watch, existsSync } = await import("fs");
     const repoPath = resolve(targetPath);
     const lockPath = detectLockfile(repoPath);
@@ -141,7 +143,7 @@ program
     console.log(chalk.dim("  Press Ctrl+C to stop.\n"));
 
     async function runScan() {
-      printHeader(repoPath, opts.provider);
+      printHeader(repoPath, effectiveProvider);
       printScanStart(pm);
       try {
         const report = runAudit(repoPath);
@@ -156,7 +158,7 @@ program
         const osvFindings = opts.osv ? await checkOsv(repoPath).catch(() => []) : [];
         const agentReport = await analyzeVulnerabilities(
           report, osvFindings, printStreamChunk,
-          { provider: opts.provider as Provider, model: opts.model }
+          { provider: effectiveProvider as Provider, model: effectiveModel }
         );
         printReport(agentReport);
         writeScanResult(repoPath, agentReport, osvFindings, [], []);
@@ -294,8 +296,8 @@ program
   .description("Local LLM-powered npm vulnerability analyzer")
   .version("0.1.0")
   .argument("[path]", "Path to npm project (default: current directory)", ".")
-  .option("--provider <provider>", "LLM provider: claude (default), ollama, lmstudio, gemini, openai", "claude")
-  .option("--model <model>", "Model name override (e.g. llama3.2, gemini-2.0-flash, gpt-4o)")
+  .option("--provider <provider>", "LLM provider: claude (default), ollama, lmstudio, gemini, openai (env: NO_VULL_PROVIDER)")
+  .option("--model <model>", "Model name override, e.g. llama3.2, gemini-2.0-flash, gpt-4o (env: NO_VULL_MODEL)")
   .option("--base-url <url>", "Base URL for local providers")
   .option("--api-key <key>", "API key (falls back to env vars)")
   .option("--no-osv", "Skip OSV.dev cross-check")
@@ -321,7 +323,8 @@ program
       }
     ) => {
       const repoPath = resolve(targetPath);
-      const provider = opts.provider as Provider;
+      const provider = (opts.provider ?? process.env.NO_VULL_PROVIDER ?? "claude") as Provider;
+      const model = opts.model ?? process.env.NO_VULL_MODEL;
       const xBearerToken = opts.xToken ?? process.env.X_BEARER_TOKEN;
 
       const pm = detectPackageManager(repoPath);
@@ -379,7 +382,7 @@ program
       let agentReport;
       try {
         agentReport = await analyzeVulnerabilities(report, osvFindings, printStreamChunk, {
-          provider, model: opts.model, baseUrl: opts.baseUrl, apiKey: opts.apiKey,
+          provider, model, baseUrl: opts.baseUrl, apiKey: opts.apiKey,
         }, dependentCounts);
       } catch (err) {
         printError(err);
