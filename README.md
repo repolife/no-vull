@@ -300,6 +300,17 @@ no-vull ~/projects/my-app
 | Shield (red) + dot | High or critical vulnerability |
 | Spinning arrows | Rescan in progress |
 
+### Notifications
+
+The menu bar sends macOS notifications in two cases:
+
+| Trigger | Notification |
+|---------|-------------|
+| Vulnerability severity worsens | "High vulnerability detected — my-app: 3 vulnerabilities found" |
+| New X/Twitter security chatter | "Security chatter on X — openai: @the_cyber_news — Critical RCE found..." |
+
+X notifications fire once per tweet — repeat scans won't re-notify for the same tweet. You'll only hear about it when something new appears.
+
 ### Rescan button
 
 Click the menu bar icon and hit **Rescan** to re-run `no-vull` against the last scanned repo. The app looks for the CLI binary in these locations:
