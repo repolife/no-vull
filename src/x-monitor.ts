@@ -39,15 +39,27 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
 }
 
+const AI_WATCHLIST = [
+  "openai",
+  "@anthropic-ai/sdk",
+  "@google/generative-ai",
+  "@google-cloud/vertexai",
+  "@mistralai/mistralai",
+  "ollama",
+  "langchain",
+  "@langchain/core",
+  "llamaindex",
+];
+
 function readDirectDeps(repoPath: string): string[] {
   const pkgPath = join(repoPath, "package.json");
-  if (!existsSync(pkgPath)) return [];
+  if (!existsSync(pkgPath)) return [...AI_WATCHLIST];
 
   let pkg: PackageJson;
   try {
     pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as PackageJson;
   } catch {
-    return [];
+    return [...AI_WATCHLIST];
   }
 
   const deps = [
@@ -55,8 +67,8 @@ function readDirectDeps(repoPath: string): string[] {
     ...Object.keys(pkg.devDependencies ?? {}),
   ];
 
-  // Strip version specifiers, keep unique
-  return [...new Set(deps)];
+  // Merge project deps with AI watchlist, dedup
+  return [...new Set([...deps, ...AI_WATCHLIST])];
 }
 
 const SECURITY_KEYWORDS = [
