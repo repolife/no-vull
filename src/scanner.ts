@@ -113,6 +113,52 @@ export interface AuditReport {
   metadata: AuditMetadata;
 }
 
+function parsePnpmAudit(raw: Record<string, unknown>): AuditReport {
+  const advisories = (raw.advisories ?? {}) as Record<string, {
+    module_name: string;
+    severity: string;
+    title: string;
+    vulnerable_versions: string;
+    patched_versions: string;
+    findings: Array<{ paths: string[] }>;
+  }>;
+  const rawMeta = (raw.metadata ?? {}) as {
+    vulnerabilities?: { info?: number; low?: number; moderate?: number; high?: number; critical?: number };
+  };
+  const metaVulns = rawMeta.vulnerabilities ?? {};
+
+  const vulnerabilities: Record<string, AuditVulnerability> = {};
+  for (const [, advisory] of Object.entries(advisories)) {
+    const severity = advisory.severity as AuditVulnerability["severity"];
+    vulnerabilities[advisory.module_name] = {
+      name: advisory.module_name,
+      severity,
+      via: [advisory.title],
+      effects: [],
+      range: advisory.vulnerable_versions,
+      nodes: advisory.findings.flatMap((f) => f.paths),
+      fixAvailable: advisory.patched_versions !== "<0.0.0" && advisory.patched_versions !== "",
+    };
+  }
+
+  const total = Object.keys(vulnerabilities).length;
+  return {
+    auditReportVersion: 2,
+    vulnerabilities,
+    metadata: {
+      vulnerabilities: {
+        info:     metaVulns.info     ?? 0,
+        low:      metaVulns.low      ?? 0,
+        moderate: metaVulns.moderate ?? 0,
+        high:     metaVulns.high     ?? 0,
+        critical: metaVulns.critical ?? 0,
+        total,
+      },
+      dependencies: { prod: 0, dev: 0, optional: 0, peer: 0, peerOptional: 0, total: 0 },
+    },
+  };
+}
+
 export function runAudit(repoPath: string): AuditReport {
   const packageJsonPath = join(repoPath, "package.json");
   if (!existsSync(packageJsonPath)) {
@@ -147,7 +193,10 @@ export function runAudit(repoPath: string): AuditReport {
   }
 
   if (isClassicYarn) return parseYarnClassicAudit(output);
-  return JSON.parse(output) as AuditReport;
+
+  const parsed = JSON.parse(output) as Record<string, unknown>;
+  if (pm === "pnpm" && "advisories" in parsed) return parsePnpmAudit(parsed);
+  return parsed as unknown as AuditReport;
 }
 
 export function summarizeReport(report: AuditReport): string {
