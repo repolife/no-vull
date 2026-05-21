@@ -29,12 +29,21 @@ final class ScanStore: ObservableObject {
         }
         let previous = latest?.topSeverity ?? .clean
         if record.topSeverity > previous {
-            scheduleNotification(for: record)
+            scheduleVulnNotification(for: record)
+        }
+        if let alerts = record.xAlerts, !alerts.isEmpty {
+            let previousIDs = Set(latest?.xAlerts?.flatMap { $0.tweets.map(\.id) } ?? [])
+            let newAlerts = alerts.filter { alert in
+                alert.tweets.contains { !previousIDs.contains($0.id) }
+            }
+            if !newAlerts.isEmpty {
+                scheduleXNotification(newAlerts: newAlerts, record: record)
+            }
         }
         latest = record
     }
 
-    private func scheduleNotification(for record: ScanRecord) {
+    private func scheduleVulnNotification(for record: ScanRecord) {
         let repoName = URL(fileURLWithPath: record.repoPath).lastPathComponent
         let content = UNMutableNotificationContent()
         content.title = "\(record.topSeverity.label) vulnerability detected"
@@ -42,7 +51,28 @@ final class ScanStore: ObservableObject {
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "no-vull-\(record.scannedAt)",
+            identifier: "no-vull-vuln-\(record.scannedAt)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func scheduleXNotification(newAlerts: [XAlert], record: ScanRecord) {
+        let repoName = URL(fileURLWithPath: record.repoPath).lastPathComponent
+        let content = UNMutableNotificationContent()
+        content.title = "Security chatter on X"
+
+        if newAlerts.count == 1, let tweet = newAlerts[0].tweets.first {
+            content.body = "\(newAlerts[0].packageName): @\(tweet.author) — \(String(tweet.text.prefix(100)))"
+        } else {
+            let names = newAlerts.prefix(3).map(\.packageName).joined(separator: ", ")
+            content.body = "\(repoName): new security tweets about \(names)"
+        }
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "no-vull-x-\(record.scannedAt)",
             content: content,
             trigger: nil
         )
