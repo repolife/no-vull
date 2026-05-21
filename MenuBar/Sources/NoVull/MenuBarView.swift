@@ -16,6 +16,10 @@ struct MenuBarView: View {
                     vulnList(report.vulnerabilities)
                     Divider()
                 }
+                if let alerts = record.xAlerts, !alerts.isEmpty {
+                    xAlertsSection(alerts)
+                    Divider()
+                }
                 actionPlan(record)
                 Divider()
             } else {
@@ -170,6 +174,60 @@ struct MenuBarView: View {
                 .padding(.bottom, 8)
             }
         }
+    }
+
+    // MARK: - X Alerts
+
+    private func xAlertsSection(_ alerts: [XAlert]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("X / Security Chatter", systemImage: "bubble.left.and.bubble.right.fill")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
+            ForEach(alerts.prefix(3)) { alert in
+                if let tweet = alert.tweets.first {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(alert.packageName)
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Text("\(tweet.likeCount)♥ \(tweet.retweetCount)↺")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("· \(tweet.hoursAgo)h ago")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        Text(tweet.text)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        Button(action: {
+                            if let url = URL(string: tweet.url) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }) {
+                            Text("View on X →")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 2)
+                }
+            }
+
+            if alerts.count > 3 {
+                Text("+ \(alerts.count - 3) more packages with chatter")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 12)
+            }
+        }
+        .padding(.bottom, 8)
     }
 
     // MARK: - Footer

@@ -78,6 +78,28 @@ struct AgentReport: Codable {
     let vulnerabilities: [VulnerabilityAnalysis]
 }
 
+struct XTweet: Codable, Identifiable {
+    var id: String
+    let text: String
+    let author: String
+    let createdAt: String
+    let url: String
+    let likeCount: Int
+    let retweetCount: Int
+
+    var hoursAgo: Int {
+        let fmt = ISO8601DateFormatter()
+        let date = fmt.date(from: createdAt) ?? Date()
+        return Int(Date().timeIntervalSince(date) / 3600)
+    }
+}
+
+struct XAlert: Codable, Identifiable {
+    var id: String { packageName }
+    let packageName: String
+    let tweets: [XTweet]
+}
+
 struct ScanRecord: Codable {
     let scannedAt: String
     let repoPath: String
@@ -85,6 +107,7 @@ struct ScanRecord: Codable {
     let totalVulns: Int
     let viralVulns: [ViralVuln]
     let agentReport: AgentReport?
+    let xAlerts: [XAlert]?
 
     var scannedDate: Date {
         let fmt = ISO8601DateFormatter()
