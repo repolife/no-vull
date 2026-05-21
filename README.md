@@ -19,6 +19,7 @@ Local LLM-powered npm vulnerability and package health analyzer. Runs `npm audit
 - **Multi-provider** — Claude, Ollama, LM Studio, Gemini, OpenAI, or any OpenAI-compatible local model
 - **pnpm / yarn support** — auto-detects lockfile and package manager
 - **macOS menu bar app** — native Swift app shows live severity badge, notifies on new findings
+- **Scheduled scans** — launchd-based periodic scanning with `no-vull schedule --every 1h`
 
 ---
 
@@ -204,6 +205,37 @@ no-vull update --fail-on abandoned
 ```
 
 Major version bumps are skipped by default because they may contain breaking changes. They appear in the "skipped" section of the plan — pass `--major` to include them.
+
+---
+
+### `no-vull schedule [path]` — Periodic Scans
+
+Installs a launchd agent (macOS) that runs scans automatically on a set interval. Results are written to `~/.no-vull/latest.json` so the menu bar updates after each run.
+
+```
+no-vull schedule [path] [options]
+
+Options:
+  --every <interval>   Scan interval: 30m, 1h, 6h, 12h, 24h (default: 1h)
+  --remove             Uninstall the scheduled scan
+```
+
+**Examples:**
+
+```bash
+# Scan every hour
+no-vull schedule ~/projects/my-app --every 1h
+
+# Scan every 30 minutes
+no-vull schedule ~/projects/my-app --every 30m
+
+# Remove the scheduled scan
+no-vull schedule --remove
+```
+
+API keys and the X Bearer token are read from `~/.no-vull/.env` and baked into the launchd plist automatically, so the scheduled scan runs with full access even without a shell session open.
+
+Logs are written to `~/.no-vull/scheduler.log`.
 
 ---
 
