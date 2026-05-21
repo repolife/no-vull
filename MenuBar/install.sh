@@ -44,6 +44,12 @@ EOF
 
 mkdir -p "$HOME/.no-vull"
 
+# Copy .env.example to ~/.no-vull/.env if it doesn't exist yet
+if [ ! -f "$HOME/.no-vull/.env" ]; then
+  cp "$(dirname "$0")/../.env.example" "$HOME/.no-vull/.env"
+  echo "Created ~/.no-vull/.env — add your API keys and X Bearer token there."
+fi
+
 # launchd agent — opens the .app bundle
 cat > "$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

@@ -1,11 +1,10 @@
 import { existsSync, readFileSync } from "fs";
-import { resolve } from "path";
+import { homedir } from "os";
+import { resolve, join } from "path";
 
-export function config(): void {
-  const envPath = resolve(process.cwd(), ".env");
-  if (!existsSync(envPath)) return;
-
-  const lines = readFileSync(envPath, "utf-8").split("\n");
+function loadFile(path: string): void {
+  if (!existsSync(path)) return;
+  const lines = readFileSync(path, "utf-8").split("\n");
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
@@ -17,4 +16,11 @@ export function config(): void {
       process.env[key] = value;
     }
   }
+}
+
+export function config(): void {
+  // Global config — always checked, used by menu bar rescan
+  loadFile(join(homedir(), ".no-vull", ".env"));
+  // Project-level config — overrides global
+  loadFile(resolve(process.cwd(), ".env"));
 }
