@@ -82,6 +82,109 @@ program
     printConfigSuggestion(configPath, loadConfig(repoPath));
   });
 
+// ─── schedule ────────────────────────────────────────────────────────────────
+program
+  .command("schedule [path]")
+  .description("Schedule periodic scans via launchd (macOS). Use --remove to cancel.")
+  .option("--every <interval>", "Scan interval: 30m, 1h, 6h, 12h, 24h", "1h")
+  .option("--remove", "Remove the scheduled scan")
+  .action(async (targetPath = ".", opts: { every: string; remove?: boolean }) => {
+    const { existsSync, readFileSync, writeFileSync, unlinkSync } = await import("fs");
+    const { execFileSync } = await import("child_process");
+    const { homedir } = await import("os");
+    const { join: pathJoin } = await import("path");
+
+    const PLIST = pathJoin(homedir(), "Library", "LaunchAgents", "com.no-vull.scheduler.plist");
+
+    if (opts.remove) {
+      if (!existsSync(PLIST)) {
+        console.log(chalk.dim("  No scheduled scan found.\n"));
+        return;
+      }
+      try { execFileSync("launchctl", ["unload", PLIST]); } catch { /* already unloaded */ }
+      unlinkSync(PLIST);
+      console.log(chalk.green("  Scheduled scan removed.\n"));
+      return;
+    }
+
+    // Parse interval
+    function parseInterval(s: string): number {
+      const n = parseInt(s);
+      if (s.endsWith("m")) return n * 60;
+      if (s.endsWith("h")) return n * 3600;
+      if (s.endsWith("d")) return n * 86400;
+      return n;
+    }
+    const seconds = parseInterval(opts.every);
+    if (!seconds || seconds < 60) {
+      printError("Interval must be at least 60s. Examples: 30m, 1h, 6h, 24h");
+      process.exit(1);
+    }
+
+    // Find no-vull binary
+    let bin: string;
+    try {
+      bin = execFileSync("which", ["no-vull"], { encoding: "utf-8" }).trim();
+    } catch {
+      printError("Could not find no-vull binary in PATH. Make sure it is installed via npm link.");
+      process.exit(1);
+    }
+
+    const repoPath = resolve(targetPath);
+
+    // Load env vars from ~/.no-vull/.env to bake into plist
+    const globalEnvPath = pathJoin(homedir(), ".no-vull", ".env");
+    const envVars: Record<string, string> = {};
+    if (existsSync(globalEnvPath)) {
+      for (const line of readFileSync(globalEnvPath, "utf-8").split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eq = trimmed.indexOf("=");
+        if (eq === -1) continue;
+        const key = trimmed.slice(0, eq).trim();
+        const value = trimmed.slice(eq + 1).trim();
+        if (key && value) envVars[key] = value;
+      }
+    }
+
+    const envXml = Object.entries(envVars)
+      .map(([k, v]) => `        <key>${k}</key>\n        <string>${v}</string>`)
+      .join("\n");
+
+    const logPath = pathJoin(homedir(), ".no-vull", "scheduler.log");
+
+    const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.no-vull.scheduler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${bin}</string>
+        <string>${repoPath}</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>${seconds}</integer>${envXml ? `\n    <key>EnvironmentVariables</key>\n    <dict>\n${envXml}\n    </dict>` : ""}
+    <key>StandardOutPath</key>
+    <string>${logPath}</string>
+    <key>StandardErrorPath</key>
+    <string>${logPath}</string>
+</dict>
+</plist>`;
+
+    try { execFileSync("launchctl", ["unload", PLIST]); } catch { /* not loaded yet */ }
+    writeFileSync(PLIST, plist, "utf-8");
+    execFileSync("launchctl", ["load", PLIST]);
+
+    const humanInterval = opts.every;
+    console.log(chalk.green(`\n  Scheduled scan every ${humanInterval}\n`));
+    console.log(chalk.dim(`  Target:  ${repoPath}`));
+    console.log(chalk.dim(`  Binary:  ${bin}`));
+    console.log(chalk.dim(`  Log:     ${logPath}`));
+    console.log(chalk.dim(`  Remove:  no-vull schedule --remove\n`));
+  });
+
 // ─── check ───────────────────────────────────────────────────────────────────
 program
   .command("check [path]")
