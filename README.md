@@ -610,6 +610,7 @@ minimumReleaseAge: 10080
 npm install
 npm run dev -- [command] [path]   # runs via tsx, no build step needed
 npm run build                      # compiles to dist/
+npm test                           # builds and runs Node test suite
 ```
 
 ---

@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { externalJson } from "./external-calls.js";
 
 export interface SupplyChainRisk {
   package: string;
@@ -51,12 +52,13 @@ async function fetchRegistryMeta(packageName: string): Promise<NpmRegistryMeta |
     const encoded = packageName.startsWith("@")
       ? "@" + encodeURIComponent(packageName.slice(1))
       : packageName;
-    const res = await fetch(`https://registry.npmjs.org/${encoded}`, {
-      signal: AbortSignal.timeout(8000),
-      headers: { Accept: "application/json" },
+    return await externalJson<NpmRegistryMeta>({
+      service: "npm",
+      operation: "supply-chain registry metadata",
+      url: `https://registry.npmjs.org/${encoded}`,
+      init: { headers: { Accept: "application/json" } },
+      timeoutMs: 8_000,
     });
-    if (!res.ok) return null;
-    return await res.json() as NpmRegistryMeta;
   } catch {
     return null;
   }

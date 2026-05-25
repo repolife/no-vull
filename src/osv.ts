@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { externalJson } from "./external-calls.js";
 
 export interface OsvVulnerability {
   id: string;
@@ -54,20 +55,19 @@ async function queryOsv(packages: Array<{ name: string; version: string }>): Pro
     version: { name: pkg.name, version: pkg.version, ecosystem: "npm" },
   }));
 
-  const response = await fetch("https://api.osv.dev/v1/querybatch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ queries }),
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OSV API error: ${response.status}`);
-  }
-
-  const data = await response.json() as {
+  const data = await externalJson<{
     results: Array<{ vulns?: OsvVulnerability[] }>;
-  };
+  }>({
+    service: "osv",
+    operation: "batch query",
+    url: "https://api.osv.dev/v1/querybatch",
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries }),
+    },
+    timeoutMs: 15_000,
+  });
 
   const findings: OsvFinding[] = [];
   data.results.forEach((result, i) => {

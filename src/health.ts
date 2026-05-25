@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { NoVullConfig } from "./config.js";
+import { externalJson } from "./external-calls.js";
 
 export type RiskLevel = "healthy" | "aging" | "abandoned" | "outdated" | "risky";
 
@@ -108,12 +109,13 @@ async function fetchRegistryInfo(name: string): Promise<NpmRegistryFull | null> 
     const encoded = name.startsWith("@")
       ? "@" + encodeURIComponent(name.slice(1))
       : name;
-    const res = await fetch(`https://registry.npmjs.org/${encoded}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
+    return await externalJson<NpmRegistryFull>({
+      service: "npm",
+      operation: "registry metadata",
+      url: `https://registry.npmjs.org/${encoded}`,
+      init: { headers: { Accept: "application/json" } },
+      timeoutMs: 8_000,
     });
-    if (!res.ok) return null;
-    return (await res.json()) as NpmRegistryFull;
   } catch {
     return null;
   }
@@ -122,12 +124,12 @@ async function fetchRegistryInfo(name: string): Promise<NpmRegistryFull | null> 
 async function fetchWeeklyDownloads(name: string): Promise<number> {
   try {
     const encoded = name.startsWith("@") ? encodeURIComponent(name) : name;
-    const res = await fetch(
-      `https://api.npmjs.org/downloads/point/last-week/${encoded}`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (!res.ok) return 0;
-    const data = (await res.json()) as NpmDownloads;
+    const data = await externalJson<NpmDownloads>({
+      service: "npm",
+      operation: "weekly downloads",
+      url: `https://api.npmjs.org/downloads/point/last-week/${encoded}`,
+      timeoutMs: 5_000,
+    });
     return data.downloads ?? 0;
   } catch {
     return 0;

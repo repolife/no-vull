@@ -1,13 +1,16 @@
+import { externalJson } from "./external-calls.js";
+
 export type DependentCounts = Map<string, number>;
 
 async function fetchDependentCount(name: string): Promise<number> {
   try {
-    const res = await fetch(
-      `https://registry.npmjs.org/-/v1/search?text=dependencies:${encodeURIComponent(name)}&size=1`,
-      { signal: AbortSignal.timeout(6000), headers: { Accept: "application/json" } }
-    );
-    if (!res.ok) return 0;
-    const data = await res.json() as { total?: number };
+    const data = await externalJson<{ total?: number }>({
+      service: "npm",
+      operation: "dependent count search",
+      url: `https://registry.npmjs.org/-/v1/search?text=dependencies:${encodeURIComponent(name)}&size=1`,
+      init: { headers: { Accept: "application/json" } },
+      timeoutMs: 6_000,
+    });
     return data.total ?? 0;
   } catch {
     return 0;

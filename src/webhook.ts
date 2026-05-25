@@ -1,4 +1,5 @@
 import type { ScanRecord } from "./storage.js";
+import { externalFetch } from "./external-calls.js";
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: "#cc0000",
@@ -106,15 +107,15 @@ export async function postWebhook(webhookUrl: string, record: ScanRecord): Promi
   const isSlack = webhookUrl.includes("hooks.slack.com") || webhookUrl.includes("slack.com/services");
   const payload = isSlack ? buildSlackPayload(record) : record;
 
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10000),
+  await externalFetch({
+    service: "webhook",
+    operation: "POST",
+    url: webhookUrl,
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    timeoutMs: 10_000,
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Webhook POST failed: ${res.status} ${body}`);
-  }
 }
