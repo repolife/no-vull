@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AuditReport } from "./scanner.js";
 import type { OsvFinding } from "./osv.js";
 import type { DependentCounts } from "./viral.js";
+import { externalOperation, streamNdjsonText, streamSseJsonText } from "./external-calls.js";
 
 export type Provider = "claude" | "ollama" | "gemini" | "openai" | "lmstudio";
 
@@ -112,39 +113,42 @@ async function analyzeWithClaude(
   model: string,
   onChunk: (text: string) => void
 ): Promise<AgentReport> {
-  const client = new Anthropic();
+  const fullText = await externalOperation({ service: "llm", operation: "Claude message stream" }, async () => {
+    const client = new Anthropic();
 
-  const stream = client.beta.messages.stream({
-    model,
-    max_tokens: 4096,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
+    const stream = client.beta.messages.stream({
+      model,
+      max_tokens: 4096,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) }],
+      output_config: {
+        format: {
+          type: "json_schema",
+          name: "security_report",
+          schema: responseSchema,
+          strict: true,
+        },
       },
-    ],
-    messages: [{ role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) }],
-    output_config: {
-      format: {
-        type: "json_schema",
-        name: "security_report",
-        schema: responseSchema,
-        strict: true,
-      },
-    },
-  });
+    });
 
-  let fullText = "";
-  for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
-      onChunk(event.delta.text);
-      fullText += event.delta.text;
+    let text = "";
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        onChunk(event.delta.text);
+        text += event.delta.text;
+      }
     }
-  }
+    return text;
+  });
 
   return JSON.parse(fullText) as AgentReport;
 }
@@ -159,57 +163,31 @@ async function analyzeWithOpenAI(
   apiKey: string,
   onChunk: (text: string) => void
 ): Promise<AgentReport> {
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const fullText = await streamSseJsonText<{
+    choices?: Array<{ delta?: { content?: string } }>;
+  }>({
+    service: "llm",
+    operation: "OpenAI chat completion",
+    url: `${baseUrl}/chat/completions`,
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) },
+        ],
+      }),
     },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) },
-      ],
-    }),
+    extractText: (data) => data.choices?.[0]?.delta?.content,
+    onChunk,
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`OpenAI request failed: ${response.status} ${body}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const decoder = new TextDecoder();
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const lines = decoder.decode(value).split("\n").filter(Boolean);
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") break;
-      try {
-        const parsed = JSON.parse(data) as {
-          choices?: Array<{ delta?: { content?: string } }>;
-        };
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          onChunk(content);
-          fullText += content;
-        }
-      } catch {
-        // partial SSE line
-      }
-    }
-  }
 
   return JSON.parse(fullText) as AgentReport;
 }
@@ -225,54 +203,29 @@ async function analyzeWithGemini(
 ): Promise<AgentReport> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [{ text: buildUserMessage(report, osvFindings, dependentCounts) }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-      },
-    }),
+  const fullText = await streamSseJsonText<{
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+  }>({
+    service: "llm",
+    operation: "Gemini content generation",
+    url,
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ text: buildUserMessage(report, osvFindings, dependentCounts) }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: responseSchema,
+        },
+      }),
+    },
+    extractText: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text,
+    onChunk,
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Gemini request failed: ${response.status} ${body}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body from Gemini");
-
-  const decoder = new TextDecoder();
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const lines = decoder.decode(value).split("\n").filter(Boolean);
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      try {
-        const parsed = JSON.parse(data) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-          }>;
-        };
-        const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          onChunk(text);
-          fullText += text;
-        }
-      } catch {
-        // partial SSE
-      }
-    }
-  }
 
   return JSON.parse(fullText) as AgentReport;
 }
@@ -286,49 +239,28 @@ async function analyzeWithOllama(
   baseUrl: string,
   onChunk: (text: string) => void
 ): Promise<AgentReport> {
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      format: "json",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) },
-      ],
-    }),
+  const fullText = await streamNdjsonText<{
+    message?: { content: string };
+  }>({
+    service: "llm",
+    operation: "Ollama chat",
+    url: `${baseUrl}/api/chat`,
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        format: "json",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildUserMessage(report, osvFindings, dependentCounts) },
+        ],
+      }),
+    },
+    extractText: (data) => data.message?.content,
+    onChunk,
   });
-
-  if (!response.ok) {
-    throw new Error(`Ollama request failed: ${response.status} ${response.statusText}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body from Ollama");
-
-  const decoder = new TextDecoder();
-  let fullText = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const lines = decoder.decode(value).split("\n").filter(Boolean);
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line) as {
-          message?: { content: string };
-        };
-        if (parsed.message?.content) {
-          onChunk(parsed.message.content);
-          fullText += parsed.message.content;
-        }
-      } catch {
-        // partial line
-      }
-    }
-  }
 
   return JSON.parse(fullText) as AgentReport;
 }

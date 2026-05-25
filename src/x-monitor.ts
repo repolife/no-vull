@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { externalFetch } from "./external-calls.js";
 
 export interface XAlert {
   packageName: string;
@@ -113,23 +114,22 @@ async function searchPackageAlerts(
     start_time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   });
 
-  const res = await fetch(
-    `https://api.twitter.com/2/tweets/search/recent?${params.toString()}`,
-    {
+  const res = await externalFetch({
+    service: "twitter",
+    operation: "recent search",
+    url: `https://api.twitter.com/2/tweets/search/recent?${params.toString()}`,
+    init: {
       headers: {
         Authorization: `Bearer ${bearerToken}`,
       },
-      signal: AbortSignal.timeout(10000),
-    }
-  );
+    },
+    timeoutMs: 10_000,
+    allowedStatuses: [429],
+  });
 
   if (res.status === 429) {
     // Rate limited — skip silently
     return [];
-  }
-
-  if (!res.ok) {
-    throw new Error(`X API error: ${res.status} ${await res.text()}`);
   }
 
   const data = (await res.json()) as TwitterSearchResponse;

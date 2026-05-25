@@ -4,6 +4,41 @@ Local LLM-powered npm vulnerability and package health analyzer. Runs `npm audit
 
 ---
 
+## TLDR
+
+```bash
+git clone git@github.com:repolife/no-vull.git
+cd no-vull
+npm install
+npm run build
+npm link
+```
+
+Run your first scan:
+
+```bash
+# Cloud LLM, if ANTHROPIC_API_KEY is set
+no-vull ~/projects/my-app
+
+# Fully local LLM via Ollama
+no-vull ~/projects/my-app --provider ollama --model llama3.2
+
+# Fast package health gate, no LLM required
+no-vull check ~/projects/my-app --fail-on outdated
+```
+
+Useful first options:
+
+```bash
+no-vull --supply-chain --report report.html
+no-vull --x-token $X_BEARER_TOKEN
+no-vull --exit-code
+```
+
+Start with `no-vull check` if you want a CI-friendly dependency health gate. Use the full `no-vull` scan when you want LLM-written remediation guidance.
+
+---
+
 ## Features
 
 - **LLM analysis** — every vulnerability explained in plain English with real-world exploitability context, not just CVSS scores
@@ -27,7 +62,7 @@ Local LLM-powered npm vulnerability and package health analyzer. Runs `npm audit
 
 ```bash
 # Clone and build
-git clone https://github.com/youruser/no-vull
+git clone git@github.com:repolife/no-vull.git
 cd no-vull
 npm install
 npm run build
@@ -547,6 +582,15 @@ no-vull auto-detects your package manager from the lockfile present in the proje
 
 The `update` command uses the correct update command syntax for each package manager automatically.
 
+For pnpm projects, no-vull recommends setting a release-age delay so newly published packages are not installable immediately:
+
+```yaml
+# pnpm-workspace.yaml
+minimumReleaseAge: 10080
+```
+
+`10080` minutes is seven days. Current pnpm versions read this from `pnpm-workspace.yaml`, not from the `pnpm` field in `package.json`.
+
 ---
 
 ## How It Works
@@ -567,3 +611,19 @@ npm install
 npm run dev -- [command] [path]   # runs via tsx, no build step needed
 npm run build                      # compiles to dist/
 ```
+
+---
+
+## Agent Skill Details
+
+This project also has a reusable Codex agent skill for dependency and library documentation work:
+
+```text
+context7-mcp
+```
+
+Use the skill when an agent is answering questions or making changes that depend on current documentation for libraries, frameworks, SDKs, APIs, CLI tools, or cloud services. It should resolve the Context7 library ID first, query the selected docs with the full user question, and retry with research mode when the default docs answer is not enough.
+
+Do not use that skill for general refactoring, business-logic debugging, code review, or writing scripts from scratch.
+
+The skill also carries the package supply-chain default used by this project: when working on JavaScript package-manager setup or hardening, actively recommend `minimumReleaseAge: 10080`. For modern pnpm, put it in `pnpm-workspace.yaml`; only suggest `package.json` placement for older package-manager versions that explicitly support it.
