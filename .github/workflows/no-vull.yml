@@ -29,16 +29,16 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Install no-vull
-        run: npm install -g no-vull
+      - name: Build no-vull
+        run: npm run build
 
       - name: Run vulnerability scan
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: no-vull . --exit-code
+        run: node dist/cli.js . --exit-code
 
       - name: Run health check against standards
-        run: no-vull check . --fail-on outdated
+        run: node dist/cli.js check . --fail-on outdated
 
   supply-chain:
     name: Supply-chain check
@@ -57,10 +57,10 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Install no-vull
-        run: npm install -g no-vull
+      - name: Build no-vull
+        run: npm run build
 
       - name: Supply-chain audit
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: no-vull . --supply-chain --exit-code
+        run: node dist/cli.js . --supply-chain --exit-code
