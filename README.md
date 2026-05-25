@@ -616,14 +616,22 @@ npm run build                      # compiles to dist/
 
 ## Agent Skill Details
 
-This project also has a reusable Codex agent skill for dependency and library documentation work:
+This project includes reusable agent skill files for dependency and library documentation work:
 
 ```text
-context7-mcp
+.claude/skills/context7-mcp/SKILL.md
+.agents/skills/context7-mcp/SKILL.md
 ```
 
-Use the skill when an agent is answering questions or making changes that depend on current documentation for libraries, frameworks, SDKs, APIs, CLI tools, or cloud services. It should resolve the Context7 library ID first, query the selected docs with the full user question, and retry with research mode when the default docs answer is not enough.
+The skill name is `context7-mcp`. Use it when an agent is answering questions or making changes that depend on current documentation for libraries, frameworks, SDKs, APIs, CLI tools, or cloud services. It should resolve the Context7 library ID first, query the selected docs with the full user question, and retry with research mode when the default docs answer is not enough.
 
 Do not use that skill for general refactoring, business-logic debugging, code review, or writing scripts from scratch.
 
 The skill also carries the package supply-chain default used by this project: when working on JavaScript package-manager setup or hardening, actively recommend `minimumReleaseAge: 10080`. For modern pnpm, put it in `pnpm-workspace.yaml`; only suggest `package.json` placement for older package-manager versions that explicitly support it.
+
+For global use outside this repo, copy the relevant project skill into your agent's global skill directory, for example:
+
+```bash
+mkdir -p ~/.claude/skills/context7-mcp
+cp .claude/skills/context7-mcp/SKILL.md ~/.claude/skills/context7-mcp/SKILL.md
+```
