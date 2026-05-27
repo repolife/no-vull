@@ -6,10 +6,13 @@ import UserNotifications
 final class ScanStore: ObservableObject {
     @Published var latest: ScanRecord? = nil
     @Published var isRescanning = false
+    @Published var githubStatus: GitHubStatusSummary? = nil
+    @Published var isRefreshingGitHubStatus = false
 
     private let latestPath: URL
     private var fileWatcher: DispatchSourceFileSystemObject?
     private let decoder = JSONDecoder()
+    private let githubStatusURL = URL(string: "https://www.githubstatus.com/api/v2/summary.json")!
 
     init() {
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
@@ -20,6 +23,7 @@ final class ScanStore: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         reload()
         startWatching()
+        Task { await refreshGitHubStatus() }
     }
 
     func reload() {
@@ -41,6 +45,25 @@ final class ScanStore: ObservableObject {
             }
         }
         latest = record
+    }
+
+    func refreshGitHubStatus() async {
+        guard !isRefreshingGitHubStatus else { return }
+        isRefreshingGitHubStatus = true
+        defer { isRefreshingGitHubStatus = false }
+
+        var request = URLRequest(url: githubStatusURL, timeoutInterval: 5)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return
+            }
+            githubStatus = try decoder.decode(GitHubStatusSummary.self, from: data)
+        } catch {
+            githubStatus = nil
+        }
     }
 
     private func scheduleVulnNotification(for record: ScanRecord) {

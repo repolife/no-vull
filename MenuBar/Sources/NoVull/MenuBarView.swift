@@ -7,6 +7,8 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            githubStatusSection
+            Divider()
             if let record = store.latest {
                 if record.viralVulns.isEmpty == false {
                     viralSection(record.viralVulns)
@@ -53,6 +55,55 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - GitHub Status
+
+    private var githubStatusSection: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: githubStatusIcon)
+                .foregroundStyle(githubStatusColor)
+                .font(.caption)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("GitHub")
+                        .font(.caption.weight(.semibold))
+                    Text(githubStatusLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(githubStatusColor)
+                }
+
+                if let status = store.githubStatus {
+                    if status.isDegraded {
+                        Text(githubStatusDetail(status))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    } else {
+                        Text(status.status?.description ?? "All Systems Operational")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Status unavailable")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button(action: { Task { await store.refreshGitHubStatus() } }) {
+                Image(systemName: store.isRefreshingGitHubStatus ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.isRefreshingGitHubStatus)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private var severityBadge: some View {
@@ -276,5 +327,31 @@ struct MenuBarView: View {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 1_000     { return String(format: "%.1fk", Double(n) / 1_000) }
         return "\(n)"
+    }
+
+    private var githubStatusLabel: String {
+        guard let status = store.githubStatus else { return "Unknown" }
+        if status.isDegraded { return status.status?.description ?? "Degraded" }
+        return "Operational"
+    }
+
+    private var githubStatusIcon: String {
+        guard let status = store.githubStatus else { return "questionmark.circle.fill" }
+        return status.isDegraded ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+    }
+
+    private var githubStatusColor: Color {
+        guard let status = store.githubStatus else { return .secondary }
+        return status.isDegraded ? .orange : .green
+    }
+
+    private func githubStatusDetail(_ status: GitHubStatusSummary) -> String {
+        if let incident = status.activeIncidents.first {
+            return "\(incident.name) (\(incident.impact))"
+        }
+        let names = status.degradedComponents.prefix(2).map(\.name).joined(separator: ", ")
+        if names.isEmpty { return status.status?.description ?? "Service degraded" }
+        let suffix = status.degradedComponents.count > 2 ? " +" : ""
+        return "\(names)\(suffix)"
     }
 }

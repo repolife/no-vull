@@ -124,3 +124,76 @@ struct ScanRecord: Codable {
         }
     }
 }
+
+enum GitHubServiceStatus: String, Codable {
+    case operational
+    case degradedPerformance = "degraded_performance"
+    case partialOutage = "partial_outage"
+    case majorOutage = "major_outage"
+    case underMaintenance = "under_maintenance"
+    case unknown
+
+    var label: String {
+        switch self {
+        case .operational: return "Operational"
+        case .degradedPerformance: return "Degraded"
+        case .partialOutage: return "Partial outage"
+        case .majorOutage: return "Major outage"
+        case .underMaintenance: return "Maintenance"
+        case .unknown: return "Unknown"
+        }
+    }
+}
+
+struct GitHubStatusComponent: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let status: GitHubServiceStatus
+}
+
+struct GitHubStatusIncident: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let status: String
+    let impact: String
+    let shortlink: String?
+    let resolvedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, status, impact, shortlink
+        case resolvedAt = "resolved_at"
+    }
+}
+
+struct GitHubStatusSummary: Codable {
+    let page: Page?
+    let status: OverallStatus?
+    let components: [GitHubStatusComponent]?
+    let incidents: [GitHubStatusIncident]?
+
+    struct Page: Codable {
+        let updatedAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case updatedAt = "updated_at"
+        }
+    }
+
+    struct OverallStatus: Codable {
+        let indicator: String?
+        let description: String?
+    }
+
+    var isDegraded: Bool {
+        let indicator = status?.indicator ?? "unknown"
+        return indicator != "none" || degradedComponents.isEmpty == false || activeIncidents.isEmpty == false
+    }
+
+    var degradedComponents: [GitHubStatusComponent] {
+        (components ?? []).filter { $0.status != .operational }
+    }
+
+    var activeIncidents: [GitHubStatusIncident] {
+        (incidents ?? []).filter { $0.resolvedAt == nil }
+    }
+}
