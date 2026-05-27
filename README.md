@@ -315,7 +315,7 @@ Debounces rapid lockfile changes during installs (1.5 second delay) to avoid fir
 
 ## macOS Menu Bar App
 
-A native Swift/SwiftUI menu bar app that shows your latest scan result at a glance and sends macOS notifications when severity worsens.
+A native Swift/SwiftUI menu bar app that shows your latest scan result, GitHub service status, and macOS notifications when severity worsens.
 
 **How it works:** the CLI writes `~/.no-vull/latest.json` after every scan. The menu bar watches that file and updates its icon automatically — no background daemon, no socket, no polling overhead.
 
@@ -361,6 +361,12 @@ The menu bar sends macOS notifications in two cases:
 | New X/Twitter security chatter | "Security chatter on X — openai: @the_cyber_news — Critical RCE found..." |
 
 X notifications fire once per tweet — repeat scans won't re-notify for the same tweet. You'll only hear about it when something new appears.
+
+### GitHub status
+
+The menu bar popover shows a GitHub status row near the top of the modal. It fetches GitHub's public status summary directly from `githubstatus.com` on launch and includes a refresh button.
+
+When GitHub is degraded, the row highlights affected components such as Actions, API Requests, Pages, or Packages and shows the active incident summary when one is available. If the status endpoint cannot be reached, it shows `Status unavailable` without blocking scans or rescans.
 
 ### Rescan button
 
