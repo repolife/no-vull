@@ -32,6 +32,9 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 340)
+        .onAppear {
+            store.refreshForPopoverOpen()
+        }
     }
 
     // MARK: - Header

@@ -47,6 +47,11 @@ final class ScanStore: ObservableObject {
         latest = record
     }
 
+    func refreshForPopoverOpen() {
+        Task { await refreshGitHubStatus() }
+        rescan()
+    }
+
     func refreshGitHubStatus() async {
         guard !isRefreshingGitHubStatus else { return }
         isRefreshingGitHubStatus = true
