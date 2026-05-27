@@ -25,6 +25,9 @@ no-vull ~/projects/my-app --provider ollama --model llama3.2
 
 # Fast package health gate, no LLM required
 no-vull check ~/projects/my-app --fail-on outdated
+
+# Check whether GitHub/GitHub Actions are degraded
+no-vull status
 ```
 
 Useful first options:
@@ -200,6 +203,19 @@ no-vull check --fail-on aging
 - name: Package health check
   run: npx no-vull check --fail-on outdated
 ```
+
+---
+
+### `no-vull status` — Upstream Status
+
+Checks GitHub's public status summary so CI users can quickly see whether failures might be caused by a GitHub, Actions, API, or Packages outage.
+
+```bash
+no-vull status
+no-vull status --exit-code
+```
+
+The plain command prints the current status and always returns normally unless the command itself crashes. `--exit-code` exits non-zero when GitHub reports degraded service or the status page cannot be reached.
 
 ---
 

@@ -1,4 +1,4 @@
-export type ExternalService = "llm" | "npm" | "osv" | "twitter" | "webhook";
+export type ExternalService = "github" | "llm" | "npm" | "osv" | "twitter" | "webhook";
 
 interface ExternalFetchOptions {
   service: ExternalService;

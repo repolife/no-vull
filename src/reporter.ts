@@ -2,6 +2,7 @@ import chalk from "chalk";
 import type { AgentReport, VulnerabilityAnalysis } from "./agent.js";
 import type { HealthReport, RiskLevel, PackageHealth } from "./health.js";
 import type { NoVullConfig } from "./config.js";
+import type { GithubStatusSummary } from "./github-status.js";
 
 const severityColor = {
   critical: chalk.red.bold,
@@ -95,6 +96,38 @@ export function printNoVulns(): void {
 export function printError(err: unknown): void {
   const msg = err instanceof Error ? err.message : String(err);
   console.error(chalk.red(`\n  Error: ${msg}\n`));
+}
+
+export function printGithubStatus(status: GithubStatusSummary | null): void {
+  if (!status) {
+    console.log(chalk.yellow("\n  GitHub status unavailable — could not reach githubstatus.com.\n"));
+    return;
+  }
+
+  const updated = status.updatedAt ? chalk.dim(` updated ${status.updatedAt}`) : "";
+  if (status.indicator === "none" && status.degradedComponents.length === 0 && status.activeIncidents.length === 0) {
+    console.log(chalk.green(`\n  GitHub status: ${status.description}${updated}\n`));
+    return;
+  }
+
+  console.log(chalk.yellow.bold(`\n  GitHub status: ${status.description}${updated}\n`));
+
+  if (status.degradedComponents.length > 0) {
+    console.log(chalk.bold("  Degraded components"));
+    for (const component of status.degradedComponents) {
+      console.log(`  - ${component.name}: ${component.status.replace(/_/g, " ")}`);
+    }
+    console.log();
+  }
+
+  if (status.activeIncidents.length > 0) {
+    console.log(chalk.bold("  Active incidents"));
+    for (const incident of status.activeIncidents) {
+      const link = incident.url ? chalk.dim(` ${incident.url}`) : "";
+      console.log(`  - ${incident.name} (${incident.impact}, ${incident.status})${link}`);
+    }
+    console.log();
+  }
 }
 
 // ─── Health / init report ────────────────────────────────────────────────────

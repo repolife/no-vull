@@ -15,6 +15,7 @@ import { fetchDependentCounts } from "./viral.js";
 import { loadConfig, writeConfig, CONFIG_FILENAME } from "./config.js";
 import { analyzeHealth } from "./health.js";
 import { analyzeVulnerabilities, type Provider } from "./agent.js";
+import { checkGithubStatus, isGithubStatusDegraded } from "./github-status.js";
 import {
   printHeader,
   printScanStart,
@@ -32,8 +33,24 @@ import {
   printCheckReport,
   printUpdatePlan,
   printUpdateResult,
+  printGithubStatus,
   type UpdateAction,
 } from "./reporter.js";
+
+// ─── status ──────────────────────────────────────────────────────────────────
+program
+  .command("status")
+  .description("Check upstream service status, including GitHub/GitHub Actions availability")
+  .option("--exit-code", "Exit non-zero when GitHub reports degraded status")
+  .action(async (opts: { exitCode?: boolean }) => {
+    console.log(chalk.bold("\n no-vull status\n"));
+    const status = await checkGithubStatus();
+    printGithubStatus(status);
+
+    if (opts.exitCode && (!status || isGithubStatusDegraded(status))) {
+      process.exit(1);
+    }
+  });
 
 // ─── init ────────────────────────────────────────────────────────────────────
 program

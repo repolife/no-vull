@@ -6,6 +6,10 @@ import {
   streamNdjsonText,
   streamSseJsonText,
 } from "../dist/external-calls.js";
+import {
+  checkGithubStatus,
+  isGithubStatusDegraded,
+} from "../dist/github-status.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -111,4 +115,48 @@ test("streamNdjsonText assembles text across NDJSON chunks", async () => {
 
   assert.equal(text, "hello");
   assert.deepEqual(chunks, ["he", "llo"]);
+});
+
+test("checkGithubStatus reports operational GitHub status", async () => {
+  mockFetch(() => Response.json({
+    page: { updated_at: "2026-05-26T12:00:00Z" },
+    status: { indicator: "none", description: "All Systems Operational" },
+    components: [
+      { name: "Git Operations", status: "operational", showcase: true },
+      { name: "Visit www.githubstatus.com for more information", status: "major_outage", showcase: false },
+    ],
+    incidents: [],
+  }));
+
+  const status = await checkGithubStatus();
+
+  assert.equal(status?.description, "All Systems Operational");
+  assert.equal(status?.degradedComponents.length, 0);
+  assert.equal(isGithubStatusDegraded(status), false);
+});
+
+test("checkGithubStatus surfaces degraded GitHub components and incidents", async () => {
+  mockFetch(() => Response.json({
+    page: { updated_at: "2026-05-26T12:00:00Z" },
+    status: { indicator: "major", description: "Major Service Outage" },
+    components: [
+      { name: "Actions", status: "major_outage", showcase: true },
+      { name: "API Requests", status: "degraded_performance", showcase: true },
+    ],
+    incidents: [
+      {
+        name: "Actions workflow delays",
+        status: "investigating",
+        impact: "major",
+        shortlink: "https://stspg.io/example",
+        resolved_at: null,
+      },
+    ],
+  }));
+
+  const status = await checkGithubStatus();
+
+  assert.equal(status?.degradedComponents.length, 2);
+  assert.equal(status?.activeIncidents[0].name, "Actions workflow delays");
+  assert.equal(isGithubStatusDegraded(status), true);
 });
