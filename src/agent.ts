@@ -1,16 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { spawn } from "child_process";
 import type { AuditReport } from "./scanner.js";
 import type { OsvFinding } from "./osv.js";
 import type { DependentCounts } from "./viral.js";
 import { externalOperation, streamNdjsonText, streamSseJsonText } from "./external-calls.js";
 
-export type Provider = "claude" | "ollama" | "gemini" | "openai" | "lmstudio";
+export type Provider = "claude" | "ollama" | "gemini" | "openai" | "lmstudio" | "command";
 
 export interface ProviderOptions {
   provider: Provider;
   model?: string;
   baseUrl?: string;
   apiKey?: string;
+  command?: string;
 }
 
 const SYSTEM_PROMPT = `You are a security expert specializing in npm package vulnerabilities. Analyze npm audit results and provide:
@@ -103,6 +105,20 @@ function buildUserMessage(report: AuditReport, osvFindings: OsvFinding[], depend
   }
 
   return msg;
+}
+
+function parseAgentReport(text: string): AgentReport {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as AgentReport;
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error("Command provider did not return JSON");
+    }
+    return JSON.parse(trimmed.slice(start, end + 1)) as AgentReport;
+  }
 }
 
 // --- Claude (Anthropic SDK, streaming + prompt caching + structured output) ---
@@ -265,6 +281,56 @@ async function analyzeWithOllama(
   return JSON.parse(fullText) as AgentReport;
 }
 
+// --- Shell command provider (stdin prompt, stdout JSON) ---
+async function analyzeWithCommand(
+  report: AuditReport,
+  osvFindings: OsvFinding[],
+  dependentCounts: DependentCounts,
+  command: string,
+  onChunk: (text: string) => void
+): Promise<AgentReport> {
+  if (!command.trim()) {
+    throw new Error("Command provider requires --command");
+  }
+
+  return externalOperation({ service: "llm", operation: "command provider" }, async () => {
+    const prompt = `${SYSTEM_PROMPT}\n\n${buildUserMessage(report, osvFindings, dependentCounts)}\n`;
+
+    const child = spawn(command, {
+      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: process.env,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf-8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      onChunk(chunk);
+    });
+
+    child.stderr.setEncoding("utf-8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    child.stdin.end(prompt);
+
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", resolve);
+    });
+
+    if (exitCode !== 0) {
+      throw new Error(`Command exited with code ${exitCode}${stderr.trim() ? `: ${stderr.trim()}` : ""}`);
+    }
+
+    return parseAgentReport(stdout);
+  });
+}
+
 // --- Public entry point ---
 export async function analyzeVulnerabilities(
   report: AuditReport,
@@ -310,6 +376,13 @@ export async function analyzeVulnerabilities(
         report, osvFindings, dependentCounts,
         options.model ?? "llama3.2",
         baseUrl ?? "http://localhost:11434",
+        onChunk
+      );
+
+    case "command":
+      return analyzeWithCommand(
+        report, osvFindings, dependentCounts,
+        options.command ?? process.env.NO_VULL_COMMAND ?? "",
         onChunk
       );
   }

@@ -418,10 +418,11 @@ program
   .description("Local LLM-powered npm vulnerability analyzer")
   .version("0.1.0")
   .argument("[path]", "Path to npm project (default: current directory)", ".")
-  .option("--provider <provider>", "LLM provider: claude (default), ollama, lmstudio, gemini, openai (env: NO_VULL_PROVIDER)")
+  .option("--provider <provider>", "LLM provider: claude (default), ollama, lmstudio, gemini, openai, command (env: NO_VULL_PROVIDER)")
   .option("--model <model>", "Model name override, e.g. llama3.2, gemini-2.0-flash, gpt-4o (env: NO_VULL_MODEL)")
   .option("--base-url <url>", "Base URL for local providers")
   .option("--api-key <key>", "API key (falls back to env vars)")
+  .option("--command <command>", "Shell command provider. Prompt is sent to stdin, JSON report read from stdout (env: NO_VULL_COMMAND)")
   .option("--no-osv", "Skip OSV.dev cross-check")
   .option("--supply-chain", "Check npm registry for supply-chain risks")
   .option("--x-token <token>", "X/Twitter Bearer token (falls back to X_BEARER_TOKEN env var)")
@@ -436,6 +437,7 @@ program
         model?: string;
         baseUrl?: string;
         apiKey?: string;
+        command?: string;
         osv: boolean;
         supplyChain: boolean;
         xToken?: string;
@@ -504,7 +506,7 @@ program
       let agentReport;
       try {
         agentReport = await analyzeVulnerabilities(report, osvFindings, printStreamChunk, {
-          provider, model, baseUrl: opts.baseUrl, apiKey: opts.apiKey,
+          provider, model, baseUrl: opts.baseUrl, apiKey: opts.apiKey, command: opts.command,
         }, dependentCounts);
       } catch (err) {
         printError(err);

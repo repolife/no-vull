@@ -401,6 +401,7 @@ rm ~/.local/bin/NoVullMenuBar
 | LM Studio | `--provider lmstudio` | Local. Default base URL: `http://localhost:1234` |
 | Gemini | `--provider gemini` | Requires `GEMINI_API_KEY` |
 | OpenAI | `--provider openai` | Requires `OPENAI_API_KEY` |
+| Command | `--provider command` | Runs a local shell command. Sends prompt to stdin and reads JSON report from stdout |
 
 **Custom base URL** (any OpenAI-compatible endpoint):
 
@@ -413,6 +414,23 @@ no-vull --provider openai --base-url http://my-server:8080 --model my-model
 ```bash
 no-vull --api-key sk-... --provider openai
 ```
+
+### Command provider
+
+Use the command provider when you already have an authenticated local AI CLI and do not want no-vull to hold an API key. no-vull writes the full security prompt to the command's stdin and expects stdout to contain JSON matching the normal `AgentReport` shape.
+
+```bash
+no-vull --provider command --command "claude -p"
+```
+
+You can also configure it once in `.env` or `~/.no-vull/.env`:
+
+```bash
+NO_VULL_PROVIDER=command
+NO_VULL_COMMAND=claude -p
+```
+
+The command runs through your shell, so only use commands you trust. If the command exits non-zero, no-vull reports the stderr output. If stdout contains extra text around the JSON, no-vull will try to parse the first JSON object it can find.
 
 ---
 
@@ -495,6 +513,7 @@ Any package with a license not in the list will be flagged as `risky`.
 |----------|---------|
 | `NO_VULL_PROVIDER` | Default LLM provider (overridden by `--provider`) |
 | `NO_VULL_MODEL` | Default model name (overridden by `--model`) |
+| `NO_VULL_COMMAND` | Shell command used by `--provider command` |
 | `ANTHROPIC_API_KEY` | Claude provider |
 | `OPENAI_API_KEY` | OpenAI provider |
 | `GEMINI_API_KEY` | Gemini provider |

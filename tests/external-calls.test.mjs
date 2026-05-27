@@ -10,6 +10,7 @@ import {
   checkGithubStatus,
   isGithubStatusDegraded,
 } from "../dist/github-status.js";
+import { analyzeVulnerabilities } from "../dist/agent.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -159,4 +160,21 @@ test("checkGithubStatus surfaces degraded GitHub components and incidents", asyn
   assert.equal(status?.degradedComponents.length, 2);
   assert.equal(status?.activeIncidents[0].name, "Actions workflow delays");
   assert.equal(isGithubStatusDegraded(status), true);
+});
+
+test("command provider sends prompt to stdin and parses JSON from stdout", async () => {
+  const command = `${process.execPath} -e "process.stdin.resume(); process.stdin.on('end', () => console.log(JSON.stringify({ summary: 'ok', totalVulnerabilities: 0, actionPlan: [], vulnerabilities: [] })))"`;
+
+  const chunks = [];
+  const report = await analyzeVulnerabilities(
+    { vulnerabilities: {}, metadata: {} },
+    [],
+    (chunk) => chunks.push(chunk),
+    { provider: "command", command },
+    new Map()
+  );
+
+  assert.equal(report.summary, "ok");
+  assert.equal(report.totalVulnerabilities, 0);
+  assert.match(chunks.join(""), /"summary":"ok"/);
 });
