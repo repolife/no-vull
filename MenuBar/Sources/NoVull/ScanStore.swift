@@ -10,6 +10,7 @@ final class ScanStore: ObservableObject {
     @Published var isRefreshingGitHubStatus = false
 
     private let latestPath: URL
+    private let targetPath: URL
     private var fileWatcher: DispatchSourceFileSystemObject?
     private let decoder = JSONDecoder()
     private let githubStatusURL = URL(string: "https://www.githubstatus.com/api/v2/summary.json")!
@@ -18,6 +19,7 @@ final class ScanStore: ObservableObject {
         let dataDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".no-vull")
         latestPath = dataDir.appendingPathComponent("latest.json")
+        targetPath = dataDir.appendingPathComponent("target.json")
 
         try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -32,7 +34,8 @@ final class ScanStore: ObservableObject {
             return
         }
         let previous = latest?.topSeverity ?? .clean
-        if record.topSeverity > previous {
+        let previousVulns = latest?.totalVulns ?? 0
+        if record.topSeverity > previous || record.totalVulns > previousVulns {
             scheduleVulnNotification(for: record)
         }
         if let alerts = record.xAlerts, !alerts.isEmpty {
@@ -107,8 +110,16 @@ final class ScanStore: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
+    private func targetRepoPath() -> String? {
+        guard let data = try? Data(contentsOf: targetPath),
+              let target = try? decoder.decode(TargetConfig.self, from: data) else {
+            return nil
+        }
+        return target.repoPath
+    }
+
     func rescan() {
-        guard !isRescanning, let repoPath = latest?.repoPath else { return }
+        guard !isRescanning, let repoPath = targetRepoPath() ?? latest?.repoPath else { return }
         isRescanning = true
 
         Task.detached { [repoPath] in

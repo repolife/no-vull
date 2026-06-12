@@ -1,6 +1,8 @@
 # no-vull
 
-Local LLM-powered npm vulnerability and package health analyzer. Runs `npm audit` under the hood, cross-references OSV.dev, scores supply-chain risk, monitors X/Twitter for emerging threats, and routes the results through a local or cloud LLM to produce plain-English explanations and a prioritized action plan — nothing leaves your machine unless you choose a cloud provider.
+Set-and-forget npm security for your machine. Point no-vull at a repo once — every `git pull` after that triggers a background vulnerability scan, and findings land in your macOS menu bar with plain-English LLM explanations. No CI to configure, no dashboard to check, no SaaS account.
+
+Under the hood it runs `npm audit`, cross-references OSV.dev, scores supply-chain risk, monitors X/Twitter for emerging threats, and routes the results through a local or cloud LLM to produce a prioritized action plan — nothing leaves your machine unless you choose a cloud provider.
 
 ---
 
@@ -14,7 +16,19 @@ npm run build
 npm link
 ```
 
-Run your first scan:
+Set up the main workflow — scan on pull, alerts in the menu bar:
+
+```bash
+# Install the menu bar app (one time)
+./MenuBar/install.sh
+
+# Make your repo the target — installs git hooks, runs first scan
+no-vull target ~/projects/my-app
+```
+
+That's it. Every `git pull` in that repo now scans in the background; the menu bar icon and a macOS notification flag new findings. Working with an AI agent? Just say **"set this repo to no-vull"** — the bundled agent skill maps that to `no-vull target`.
+
+One-off scans and CI when you need them:
 
 ```bash
 # Cloud LLM, if ANTHROPIC_API_KEY is set
@@ -23,7 +37,7 @@ no-vull ~/projects/my-app
 # Fully local LLM via Ollama
 no-vull ~/projects/my-app --provider ollama --model llama3.2
 
-# Fast package health gate, no LLM required
+# Fast package health gate, no LLM required (CI-friendly)
 no-vull check ~/projects/my-app --fail-on outdated
 
 # Check whether GitHub/GitHub Actions are degraded
@@ -38,12 +52,13 @@ no-vull --x-token $X_BEARER_TOKEN
 no-vull --exit-code
 ```
 
-Start with `no-vull check` if you want a CI-friendly dependency health gate. Use the full `no-vull` scan when you want LLM-written remediation guidance.
-
 ---
 
 ## Features
 
+- **Scan on pull** — `no-vull target` installs git hooks so every `git pull` triggers a background scan; findings alert in the menu bar
+- **macOS menu bar app** — native Swift app shows live severity badge, notifies on new findings
+- **Agent-ready** — bundled skill lets AI agents set up everything from one phrase: "set this repo to no-vull"
 - **LLM analysis** — every vulnerability explained in plain English with real-world exploitability context, not just CVSS scores
 - **Package health scoring** — flags aging, abandoned, outdated, and risky packages against configurable standards
 - **OSV.dev cross-check** — matches your lockfile against the Open Source Vulnerabilities database for additional CVEs
@@ -56,7 +71,6 @@ Start with `no-vull check` if you want a CI-friendly dependency health gate. Use
 - **CI mode** — `check` command exits non-zero on violations, `--exit-code` flag for scan
 - **Multi-provider** — Claude, Ollama, LM Studio, Gemini, OpenAI, or any OpenAI-compatible local model
 - **pnpm / yarn support** — auto-detects lockfile and package manager
-- **macOS menu bar app** — native Swift app shows live severity badge, notifies on new findings
 - **Scheduled scans** — launchd-based periodic scanning with `no-vull schedule --every 1h`
 
 ---
@@ -85,7 +99,11 @@ npx tsx src/cli.ts [command] [path]
 ## Quick Start
 
 ```bash
-# Scan the current directory (uses Claude by default)
+# Recommended: set the current repo as the target — scan on every pull,
+# findings in the menu bar
+no-vull target
+
+# One-off scan of the current directory (uses Claude by default)
 no-vull
 
 # Scan a specific project
@@ -259,6 +277,43 @@ Major version bumps are skipped by default because they may contain breaking cha
 
 ---
 
+### `no-vull target [path]` — Scan on Pull
+
+Registers a repo as the no-vull target. From then on, every `git pull` triggers a background scan and findings surface in the macOS menu bar — no manual steps.
+
+```
+no-vull target [path] [options]
+
+Options:
+  --remove    Unset the target and remove the scan-on-pull git hooks
+  --no-scan   Skip the initial background scan
+```
+
+**What it does:**
+
+1. Saves the repo path to `~/.no-vull/target.json` (the menu bar app uses this for its rescan button)
+2. Installs `post-merge` and `post-rewrite` git hooks — covering both `git pull` and `git pull --rebase` — that run a background scan after each pull
+3. Kicks off an initial background scan so the menu bar updates immediately
+
+Existing git hooks are preserved: no-vull appends a clearly marked managed block and only ever touches that block. Re-running `target` is idempotent. Hook output goes to `~/.no-vull/hook.log`.
+
+**Examples:**
+
+```bash
+# Make the current repo the target
+no-vull target
+
+# Target a specific repo
+no-vull target ~/projects/my-app
+
+# Stop scanning on pull
+no-vull target --remove
+```
+
+This is the one-command setup: tell an agent "set this repo as the no-vull target" and `no-vull target` does the rest.
+
+---
+
 ### `no-vull schedule [path]` — Periodic Scans
 
 Installs a launchd agent (macOS) that runs scans automatically on a set interval. Results are written to `~/.no-vull/latest.json` so the menu bar updates after each run.
@@ -357,7 +412,7 @@ The menu bar sends macOS notifications in two cases:
 
 | Trigger | Notification |
 |---------|-------------|
-| Vulnerability severity worsens | "High vulnerability detected — my-app: 3 vulnerabilities found" |
+| Vulnerability severity worsens or vuln count grows | "High vulnerability detected — my-app: 3 vulnerabilities found" |
 | New X/Twitter security chatter | "Security chatter on X — openai: @the_cyber_news — Critical RCE found..." |
 
 X notifications fire once per tweet — repeat scans won't re-notify for the same tweet. You'll only hear about it when something new appears.
@@ -370,7 +425,7 @@ When GitHub is degraded, the row highlights affected components such as Actions,
 
 ### Rescan button
 
-Click the menu bar icon and hit **Rescan** to re-run `no-vull` against the last scanned repo. The app looks for the CLI binary in these locations:
+Click the menu bar icon and hit **Rescan** to re-run `no-vull` against the target repo (set via `no-vull target`), falling back to the last scanned repo. The app looks for the CLI binary in these locations:
 
 1. `/usr/local/bin/no-vull`
 2. `~/.local/bin/no-vull`
@@ -669,9 +724,13 @@ npm test                           # builds and runs Node test suite
 This project includes reusable agent skill files for dependency and library documentation work:
 
 ```text
+.claude/skills/no-vull/SKILL.md
+.agents/skills/no-vull/SKILL.md
 .claude/skills/context7-mcp/SKILL.md
 .agents/skills/context7-mcp/SKILL.md
 ```
+
+The `no-vull` skill teaches agents the CLI itself: say "set this repo to no-vull" or "connect to no-vull" and the agent runs `no-vull target` (plus scan/check/update/etc. as needed) and reads findings from `~/.no-vull/latest.json`. Copy it to your agent's global skill directory (e.g. `~/.claude/skills/no-vull/`) so it works from any repo.
 
 The skill name is `context7-mcp`. Use it when an agent is answering questions or making changes that depend on current documentation for libraries, frameworks, SDKs, APIs, CLI tools, or cloud services. It should resolve the Context7 library ID first, query the selected docs with the full user question, and retry with research mode when the default docs answer is not enough.
 

@@ -17,6 +17,14 @@ import { analyzeHealth } from "./health.js";
 import { analyzeVulnerabilities, type Provider } from "./agent.js";
 import { checkGithubStatus, isGithubStatusDegraded } from "./github-status.js";
 import {
+  readTarget,
+  writeTarget,
+  clearTarget,
+  installHooks,
+  removeHooks,
+  resolveScanCommand,
+} from "./target.js";
+import {
   printHeader,
   printScanStart,
   printScanResult,
@@ -49,6 +57,72 @@ program
 
     if (opts.exitCode && (!status || isGithubStatusDegraded(status))) {
       process.exit(1);
+    }
+  });
+
+// ─── target ──────────────────────────────────────────────────────────────────
+program
+  .command("target [path]")
+  .description(
+    "Set the target repo: scan on every git pull and alert findings in the menu bar. Use --remove to unset."
+  )
+  .option("--remove", "Unset the target and remove the scan-on-pull git hooks")
+  .option("--no-scan", "Skip the initial background scan")
+  .action(async (targetPath: string | undefined, opts: { remove?: boolean; scan: boolean }) => {
+    const { existsSync } = await import("fs");
+
+    if (opts.remove) {
+      const target = readTarget();
+      const repoPath = resolve(targetPath ?? target?.repoPath ?? ".");
+      try {
+        const touched = removeHooks(repoPath);
+        if (touched.length > 0) {
+          console.log(chalk.green(`\n  Removed scan-on-pull hooks from ${repoPath}`));
+        }
+      } catch {
+        console.log(chalk.dim(`\n  No git hooks to remove in ${repoPath}`));
+      }
+      if (target && resolve(target.repoPath) === repoPath) clearTarget();
+      console.log(chalk.green("  Target unset.\n"));
+      return;
+    }
+
+    const repoPath = resolve(targetPath ?? ".");
+
+    if (!existsSync(resolve(repoPath, "package.json"))) {
+      printError(`No package.json found in ${repoPath} — target must be an npm project`);
+      process.exit(1);
+    }
+    if (!existsSync(detectLockfile(repoPath))) {
+      printError("No lockfile found (package-lock.json, pnpm-lock.yaml, yarn.lock) — scans require a lockfile");
+      process.exit(1);
+    }
+
+    const scanCmd = resolveScanCommand();
+
+    let hookPaths: string[];
+    try {
+      hookPaths = installHooks(repoPath, scanCmd);
+    } catch {
+      printError(`${repoPath} is not a git repository — scan-on-pull needs git hooks`);
+      process.exit(1);
+    }
+
+    writeTarget(repoPath);
+
+    console.log(chalk.green(`\n  Target set: ${repoPath}\n`));
+    console.log(chalk.dim(`  Scan on pull: ${hookPaths.map((p) => p.split("/").pop()).join(", ")} hooks installed`));
+    console.log(chalk.dim(`  Findings appear in the menu bar app (~/.no-vull/latest.json)`));
+    console.log(chalk.dim(`  Hook log: ~/.no-vull/hook.log`));
+    console.log(chalk.dim(`  Unset:    no-vull target --remove\n`));
+
+    if (opts.scan) {
+      const { spawn } = await import("child_process");
+      spawn(scanCmd[0], [...scanCmd.slice(1), repoPath], {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+      console.log(chalk.dim("  Initial scan running in background — menu bar will update when done.\n"));
     }
   });
 

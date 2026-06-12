@@ -125,6 +125,11 @@ struct ScanRecord: Codable {
     }
 }
 
+struct TargetConfig: Codable {
+    let repoPath: String
+    let setAt: String
+}
+
 enum GitHubServiceStatus: String, Codable {
     case operational
     case degradedPerformance = "degraded_performance"
