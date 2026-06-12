@@ -44,8 +44,25 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("no-vull")
                     .font(.headline)
-                if let record = store.latest {
-                    Text(record.repoPath.components(separatedBy: "/").last ?? record.repoPath)
+                if let target = store.targetRepo {
+                    Text(repoName(target))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let record = store.latest, record.repoPath == target {
+                        Text("Scanned \(record.timeAgo)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    } else if let record = store.latest {
+                        Text("No scan yet — showing \(repoName(record.repoPath)) (\(record.timeAgo))")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("No scan yet — hit Re-scan")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                } else if let record = store.latest {
+                    Text(repoName(record.repoPath))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("Scanned \(record.timeAgo)")
@@ -296,7 +313,7 @@ struct MenuBarView: View {
                 .font(.caption)
             }
             .buttonStyle(.plain)
-            .disabled(store.isRescanning || store.latest == nil)
+            .disabled(store.isRescanning || (store.latest == nil && store.targetRepo == nil))
 
             Spacer()
 
@@ -324,6 +341,10 @@ struct MenuBarView: View {
 
     private func severityFromString(_ s: String) -> TopSeverity {
         TopSeverity(rawValue: s.lowercased()) ?? .info
+    }
+
+    private func repoName(_ path: String) -> String {
+        path.components(separatedBy: "/").last ?? path
     }
 
     private func formatDependents(_ n: Int) -> String {

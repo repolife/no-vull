@@ -5,6 +5,7 @@ import UserNotifications
 @MainActor
 final class ScanStore: ObservableObject {
     @Published var latest: ScanRecord? = nil
+    @Published var targetRepo: String? = nil
     @Published var isRescanning = false
     @Published var githubStatus: GitHubStatusSummary? = nil
     @Published var isRefreshingGitHubStatus = false
@@ -29,6 +30,7 @@ final class ScanStore: ObservableObject {
     }
 
     func reload() {
+        targetRepo = readTargetRepo()
         guard let data = try? Data(contentsOf: latestPath),
               let record = try? decoder.decode(ScanRecord.self, from: data) else {
             return
@@ -51,6 +53,7 @@ final class ScanStore: ObservableObject {
     }
 
     func refreshForPopoverOpen() {
+        targetRepo = readTargetRepo()
         Task { await refreshGitHubStatus() }
         rescan()
     }
@@ -110,7 +113,7 @@ final class ScanStore: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    private func targetRepoPath() -> String? {
+    private func readTargetRepo() -> String? {
         guard let data = try? Data(contentsOf: targetPath),
               let target = try? decoder.decode(TargetConfig.self, from: data) else {
             return nil
@@ -119,7 +122,7 @@ final class ScanStore: ObservableObject {
     }
 
     func rescan() {
-        guard !isRescanning, let repoPath = targetRepoPath() ?? latest?.repoPath else { return }
+        guard !isRescanning, let repoPath = targetRepo ?? latest?.repoPath else { return }
         isRescanning = true
 
         Task.detached { [repoPath] in

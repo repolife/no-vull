@@ -118,11 +118,16 @@ program
 
     if (opts.scan) {
       const { spawn } = await import("child_process");
+      const { openSync } = await import("fs");
+      const { homedir } = await import("os");
+      const { join } = await import("path");
+      const logFd = openSync(join(homedir(), ".no-vull", "hook.log"), "a");
       spawn(scanCmd[0], [...scanCmd.slice(1), repoPath], {
         detached: true,
-        stdio: "ignore",
+        stdio: ["ignore", logFd, logFd],
       }).unref();
-      console.log(chalk.dim("  Initial scan running in background — menu bar will update when done.\n"));
+      console.log(chalk.dim("  Initial scan running in background — menu bar will update when done."));
+      console.log(chalk.dim("  Scan output: ~/.no-vull/hook.log\n"));
     }
   });
 
@@ -584,6 +589,28 @@ program
         }, dependentCounts);
       } catch (err) {
         printError(err);
+        // LLM failed but the audit succeeded — record raw findings so the
+        // menu bar still reflects reality instead of a stale scan
+        const fallback = {
+          summary: `LLM analysis failed: ${err instanceof Error ? err.message : String(err)}. Showing raw audit findings.`,
+          totalVulnerabilities: Object.keys(report.vulnerabilities).length,
+          actionPlan: [
+            "Configure an LLM provider (e.g. ANTHROPIC_API_KEY in ~/.no-vull/.env) and re-scan for full analysis",
+          ],
+          vulnerabilities: Object.values(report.vulnerabilities).map((v) => ({
+            package: v.name,
+            severity: v.severity,
+            explanation: "LLM analysis unavailable — raw audit finding.",
+            exploitability: "medium" as const,
+            remediation:
+              typeof v.fixAvailable === "object"
+                ? `Update to ${v.fixAvailable.name}@${v.fixAvailable.version}`
+                : v.fixAvailable
+                  ? "Fix available via package update"
+                  : "No direct fix available yet",
+          })),
+        };
+        writeScanResult(repoPath, fallback, osvFindings, supplyChainRisks, xAlerts, dependentCounts);
         process.exit(1);
       }
 
