@@ -417,20 +417,28 @@ no-vull --api-key sk-... --provider openai
 
 ### Command provider
 
-Use the command provider when you already have an authenticated local AI CLI and do not want no-vull to hold an API key. no-vull writes the full security prompt to the command's stdin and expects stdout to contain JSON matching the normal `AgentReport` shape.
+Use this when you already have an authenticated local AI CLI and do not want no-vull to hold an API key. no-vull sends the prompt to stdin and reads the JSON report from stdout.
+
+Claude Code:
 
 ```bash
 no-vull --provider command --command "claude -p"
 ```
 
-You can also configure it once in `.env` or `~/.no-vull/.env`:
+Codex CLI:
+
+```bash
+no-vull --provider command --command "codex exec"
+```
+
+Save it once in `.env` or `~/.no-vull/.env`:
 
 ```bash
 NO_VULL_PROVIDER=command
 NO_VULL_COMMAND=claude -p
 ```
 
-The command runs through your shell, so only use commands you trust. If the command exits non-zero, no-vull reports the stderr output. If stdout contains extra text around the JSON, no-vull will try to parse the first JSON object it can find.
+The command must print JSON matching no-vull's report shape. Only use commands you trust; this runs through your shell.
 
 ---
 
